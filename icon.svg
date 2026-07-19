@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="financialGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#0369a1" />
+    </linearGradient>
+  </defs>
+  <!-- 背景圆角矩形 -->
+  <rect width="512" height="512" rx="112" fill="url(#financialGrad)"/>
+  <!-- 数据资产图表几何元素 -->
+  <g fill="#ffffff">
+    <rect x="130" y="300" width="40" height="80" rx="4" />
+    <rect x="200" y="240" width="40" height="140" rx="4" />
+    <rect x="270" y="160" width="40" height="220" rx="4" />
+    <rect x="340" y="210" width="40" height="170" rx="4" />
+    <rect x="100" y="396" width="312" height="12" rx="3" opacity="0.6"/>
+  </g>
+  <!-- 增长趋势线 -->
+  <path d="M150 280 L220 210 L290 130 L360 180" fill="none" stroke="#10b981" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="290" cy="130" r="14" fill="#10b981" />
+</svg>
