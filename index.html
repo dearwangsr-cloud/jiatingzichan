@@ -21,6 +21,7 @@
             });
         }
     </script>
+
     <style>
         :root {
             --primary-color: #0284c7;
@@ -103,8 +104,24 @@
 
         @media (max-width: 640px) {
             .dashboard {
-                grid-template-columns: 1fr;
-                gap: 12px;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 6px;
+            }
+            .card-stat {
+                padding: 10px 6px !important;
+                border-left-width: 3px !important;
+            }
+            .stat-label {
+                font-size: 10px !important;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .stat-value {
+                font-size: 12px !important;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
         }
 
@@ -370,24 +387,26 @@
 
     <div class="dashboard">
         <div class="card-stat asset">
-            <div class="stat-label">家庭资产总额 (元)</div>
+            <div class="stat-label">家庭资产总额</div>
             <div class="stat-value asset-val" id="totalAssets">0.00</div>
         </div>
         <div class="card-stat debt">
-            <div class="stat-label">家庭负债总额 (元)</div>
+            <div class="stat-label">家庭负债总额</div>
             <div class="stat-value debt-val" id="totalDebts">0.00</div>
         </div>
         <div class="card-stat net">
-            <div class="stat-label">家庭净资产 (元)</div>
+            <div class="stat-label">家庭净资产</div>
             <div class="stat-value net-val" id="netAssets">0.00</div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-title" style="color: var(--primary-color);">
+    <!-- 资产登记模块增加点击折叠功能 -->
+    <div class="card" style="margin-bottom: 16px;">
+        <div class="card-title" style="color: var(--primary-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;" onclick="toggleForm('assetFormGrid', this)">
             <span>➕ 资产登记</span>
+            <span class="toggle-arrow" style="font-size: 12px; color: var(--text-muted);">▶</span>
         </div>
-        <div class="form-grid">
+        <div class="form-grid" id="assetFormGrid" style="display: none; margin-top: 16px;">
             <div class="form-group">
                 <label>家庭成员</label>
                 <input type="text" id="assetMember" class="form-control" list="listMembers" placeholder="可选择或手打输入">
@@ -416,11 +435,13 @@
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-title" style="color: var(--danger-color);">
+    <!-- 负债登记模块增加点击折叠功能 -->
+    <div class="card" style="margin-bottom: 16px;">
+        <div class="card-title" style="color: var(--danger-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;" onclick="toggleForm('debtFormGrid', this)">
             <span>➖ 负债登记</span>
+            <span class="toggle-arrow" style="font-size: 12px; color: var(--text-muted);">▶</span>
         </div>
-        <div class="form-grid">
+        <div class="form-grid" id="debtFormGrid" style="display: none; margin-top: 16px;">
             <div class="form-group">
                 <label>家庭成员</label>
                 <input type="text" id="debtMember" class="form-control" list="listMembers" placeholder="可选择或手打输入">
@@ -573,6 +594,21 @@
         }
     }
 
+    // 控制登记面板的折叠和展开
+    function toggleForm(gridId, titleElement) {
+        const grid = document.getElementById(gridId);
+        const arrow = titleElement.querySelector('.toggle-arrow');
+        if (grid.style.display === 'none') {
+            grid.style.display = 'grid';
+            arrow.innerText = '▼';
+            titleElement.style.removeAttribute ? titleElement.style.removeAttribute('margin-bottom') : titleElement.style.marginBottom = '16px';
+        } else {
+            grid.style.display = 'none';
+            arrow.innerText = '▶';
+            titleElement.style.marginBottom = '0';
+        }
+    }
+
     // 全局页面UI刷新机制
     function refreshUI() {
         updateDashboard();
@@ -593,13 +629,20 @@
         document.getElementById('netAssets').innerText = netAssetsSum.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    // 2. 动态加载联想框下拉列表数据
+    // 2. 动态加载并合并历史输入记录到联想框下拉列表数据
     function updateDatalists() {
-        bindDatalist('listMembers', state.options.members);
-        bindDatalist('listAssetNames', state.options.assetNames);
-        bindDatalist('listAssetCategories', state.options.assetCategories);
-        bindDatalist('listDebtNames', state.options.debtNames);
-        bindDatalist('listDebtCategories', state.options.debtCategories);
+        // 动态抓取当前 assets & debts 里的所有出现过的名称和分类，做到真正显示“之前记录过的名称”
+        const currentMembers = Array.from(new Set([...state.options.members, ...state.assets.map(a => a.member), ...state.debts.map(d => d.member)]));
+        const currentAssetNames = Array.from(new Set([...state.options.assetNames, ...state.assets.map(a => a.name)]));
+        const currentAssetCats = Array.from(new Set([...state.options.assetCategories, ...state.assets.map(a => a.category)]));
+        const currentDebtNames = Array.from(new Set([...state.options.debtNames, ...state.debts.map(d => d.name)]));
+        const currentDebtCats = Array.from(new Set([...state.options.debtCategories, ...state.debts.map(d => d.category)]));
+
+        bindDatalist('listMembers', currentMembers);
+        bindDatalist('listAssetNames', currentAssetNames);
+        bindDatalist('listAssetCategories', currentAssetCats);
+        bindDatalist('listDebtNames', currentDebtNames);
+        bindDatalist('listDebtCategories', currentDebtCats);
     }
 
     function bindDatalist(elementId, items) {
@@ -617,7 +660,6 @@
 
     // 3. 点击“保存资产记录”按钮的执行入口函数
     function saveAssetRecord() {
-        // 精确抓取DOM节点元素值
         const memberInput = document.getElementById('assetMember');
         const nameInput = document.getElementById('assetName');
         const categoryInput = document.getElementById('assetCategory');
@@ -632,7 +674,6 @@
         const date = dateInput.value;
         const remark = remarkInput.value.trim();
 
-        // 强校验表单完整度，确保不会出现点击没反应现象
         if (!member || !name || !category || !amountStr || !date) {
             alert('请完整填写必填项信息（家庭成员、资产名称、资产类别、金额、统计日期）！');
             return;
@@ -644,7 +685,6 @@
             return;
         }
 
-        // 构建一条资产结构体记录
         const record = {
             id: 'asset_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
             member: member,
@@ -655,17 +695,14 @@
             remark: remark
         };
 
-        // 追加记录与去重联想池维护
         state.assets.push(record);
         if (!state.options.members.includes(member)) state.options.members.push(member);
         if (!state.options.assetNames.includes(name)) state.options.assetNames.push(name);
         if (!state.options.assetCategories.includes(category)) state.options.assetCategories.push(category);
 
-        // 数据持久化写库与重绘UI界面
         saveToLocalStorage();
         refreshUI();
 
-        // 完成保存后重置输入表单（日期保持不变以方便连续记账）
         memberInput.value = '';
         nameInput.value = '';
         categoryInput.value = '';
@@ -691,7 +728,6 @@
         const date = dateInput.value;
         const remark = remarkInput.value.trim();
 
-        // 校验负债表单完整度
         if (!member || !name || !category || !amountStr || !date) {
             alert('请完整填写必填项信息（家庭成员、负债名称、负债类别、金额、统计日期）！');
             return;
@@ -703,7 +739,6 @@
             return;
         }
 
-        // 构建负债记录
         const record = {
             id: 'debt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
             member: member,
@@ -722,7 +757,6 @@
         saveToLocalStorage();
         refreshUI();
 
-        // 清空输入表单以便下次填写
         memberInput.value = '';
         nameInput.value = '';
         categoryInput.value = '';
@@ -734,7 +768,6 @@
 
     // 5. 账目明细底层数据表格渲染
     function renderTables() {
-        // 渲染资产表格
         const assetBody = document.getElementById('assetTableBody');
         const assetEmpty = document.getElementById('assetEmpty');
         assetBody.innerHTML = '';
@@ -743,7 +776,6 @@
             assetEmpty.style.display = 'block';
         } else {
             assetEmpty.style.display = 'none';
-            // 按照日期由近到远降序展示
             const sortedAssets = [...state.assets].sort((a, b) => new Date(b.date) - new Date(a.date));
             sortedAssets.forEach(item => {
                 let tr = document.createElement('tr');
@@ -760,7 +792,6 @@
             });
         }
 
-        // 渲染负债表格
         const debtBody = document.getElementById('debtTableBody');
         const debtEmpty = document.getElementById('debtEmpty');
         debtBody.innerHTML = '';
@@ -786,7 +817,6 @@
         }
     }
 
-    // 明细表列表类型切换 (资产明细 vs 负债明细)
     function switchDetailTab(type) {
         currentDetailTab = type;
         document.getElementById('detailTabAsset').classList.toggle('active', type === 'asset');
@@ -795,7 +825,6 @@
         document.getElementById('tableDebtContainer').style.display = (type === 'debt') ? 'block' : 'none';
     }
 
-    // 删除单行账目明细数据
     function deleteRecord(type, id) {
         if (!confirm('确定要彻底删除该条记账记录吗？')) return;
 
@@ -822,7 +851,6 @@
         const canvas = document.getElementById('assetChart');
         const emptyTip = document.getElementById('chartEmptyTip');
 
-        // 如果完全没有资产数据，则隐去图表显示文字提示
         if (state.assets.length === 0) {
             canvas.style.display = 'none';
             emptyTip.style.display = 'block';
@@ -836,7 +864,6 @@
         canvas.style.display = 'block';
         emptyTip.style.display = 'none';
 
-        // 分组归集计算核心算法
         let groupData = {};
         state.assets.forEach(item => {
             let key = '';
@@ -848,22 +875,19 @@
             groupData[key] += parseFloat(item.amount || 0);
         });
 
-        // 提炼标签组与对应数组值
         let labels = Object.keys(groupData);
         let values = Object.values(groupData);
 
-        // 如果旧的 Chart.js 实例依然存活，先手动销毁防止渲染卡顿与动画重叠闪烁
         if (chartInstance) {
             chartInstance.destroy();
         }
 
-        // 高质量多色盘配置支持
         const colorPalette = [
             '#0284c7', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', 
             '#3b82f6', '#14b8a6', '#f97316', '#6366f1', '#a855f7'
         ];
 
-        // 构建初始化 Chart.js 环形统计饼图
+        // 构建初始化 Chart.js 并通过自定义中心内容绘制插件（完美实现图例点击动态加减总额）
         chartInstance = new Chart(canvas, {
             type: 'doughnut',
             data: {
@@ -885,6 +909,12 @@
                             boxWidth: 12,
                             padding: 12,
                             font: { size: 11 }
+                        },
+                        // 图例点击回调拦截：图例被剔除时触发重新绘图计算
+                        onClick: function(e, legendItem, legend) {
+                            const index = legendItem.index;
+                            legend.chart.toggleDataVisibility(index);
+                            legend.chart.update();
                         }
                     },
                     tooltip: {
@@ -898,7 +928,45 @@
                         }
                     }
                 }
-            }
+            },
+            // 使用自定义核心 Canvas 插件在圆环图中心写字，做到绝对适配且完美响应点击事件
+            plugins: [{
+                id: 'centerTotalPlugin',
+                afterDraw: function(chart) {
+                    if (chart.config.type !== 'doughnut') return;
+                    const { ctx, chartArea } = chart;
+                    if (!chartArea) return;
+
+                    // 计算甜甜圈的几何正中心
+                    const centerX = (chartArea.left + chartArea.right) / 2;
+                    const centerY = (chartArea.top + chartArea.bottom) / 2;
+
+                    ctx.save();
+                    
+                    // 1. 绘制上半部分的提示字
+                    ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
+                    ctx.fillStyle = "#64748b";
+                    ctx.textBaseline = "middle";
+                    ctx.textAlign = "center";
+                    ctx.fillText("选中资产总额", centerX, centerY - 10);
+
+                    // 2. 实时动态计算当前“未被隐藏”的分类金额总和
+                    let currentVisibleTotal = 0;
+                    const dataset = chart.data.datasets[0];
+                    dataset.data.forEach((val, i) => {
+                        if (chart.getDataVisibility(i)) {
+                            currentVisibleTotal += parseFloat(val || 0);
+                        }
+                    });
+
+                    // 3. 绘制下半部分的动态计算金额
+                    ctx.font = "bold 13px -apple-system, BlinkMacSystemFont, sans-serif";
+                    ctx.fillStyle = "#1e293b";
+                    ctx.fillText(currentVisibleTotal.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " 元", centerX, centerY + 10);
+                    
+                    ctx.restore();
+                }
+            }]
         });
     }
 
@@ -917,12 +985,10 @@
         downloadAnchor.remove();
     }
 
-    // 触发隐藏的导入文本框
     function importDataClick() {
         document.getElementById('fileInput').click();
     }
 
-    // 处理并解析导入过来的 JSON 数据源
     function handleImport(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -931,7 +997,6 @@
         reader.onload = function(evt) {
             try {
                 const parsed = JSON.parse(evt.target.result);
-                // 数据字段鲁棒性安全检查
                 if (parsed.assets || parsed.debts) {
                     if (parsed.assets) state.assets = parsed.assets;
                     if (parsed.debts) state.debts = parsed.debts;
@@ -946,12 +1011,11 @@
             } catch (err) {
                 alert('读取或解析数据文件发生错误，请检查 JSON 文件是否受损！');
             }
-            e.target.value = ''; // 还原清空文件控件，便于连续重复导入
+            e.target.value = '';
         };
         reader.readAsText(file);
     }
 
-    // 全局数据一键重置清空
     function clearAllData() {
         if (!confirm('警告：此操作将永久清空您设备本地保存的所有资产和负债记录！确认重置吗？')) return;
         state.assets = [];
@@ -961,7 +1025,6 @@
         alert('本地账目数据库已全部重置清空！');
     }
 
-    // HTML XSS 转义安全工具函数
     function escapeHtml(str) {
         if (!str) return '';
         return str.replace(/&/g, "&amp;")
