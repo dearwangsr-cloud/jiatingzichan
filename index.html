@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -970,19 +970,29 @@
         });
     }
 
-    // 7. 辅助功能：数据导出为 JSON 文件
+    // 7. 辅助功能：数据导出为 JSON 文件（已优化 Blob 方式，解决部分设备和系统无法识别选择的问题）
     function exportData() {
         if (state.assets.length === 0 && state.debts.length === 0) {
             alert('当前系统中无任何记账数据可供导出！');
             return;
         }
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+        
+        // 使用 Blob 对象替代原来的 data URI，确保导出文件的 MIME type 完美规范
+        const dataStr = JSON.stringify(state, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json;charset=utf-8' });
         const downloadAnchor = document.createElement('a');
-        downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", `家庭资产负债备份数据_${new Date().toISOString().split('T')[0]}.json`);
+        
+        downloadAnchor.href = URL.createObjectURL(blob);
+        downloadAnchor.download = `家庭资产负债备份数据_${new Date().toISOString().split('T')[0]}.json`;
+        
         document.body.appendChild(downloadAnchor);
         downloadAnchor.click();
         downloadAnchor.remove();
+        
+        // 释放内存中的 URL 对象
+        setTimeout(() => {
+            URL.revokeObjectURL(downloadAnchor.href);
+        }, 1000);
     }
 
     function importDataClick() {
