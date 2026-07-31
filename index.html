@@ -918,6 +918,15 @@
                         }
                     },
                     tooltip: {
+                        // 优化：将悬浮提示框背景改为不透明的纯色，并增加边框与阴影，避免与中心文字半透明重叠干扰
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        titleColor: '#1e293b',
+                        bodyColor: '#334155',
+                        borderColor: '#e2e8f0',
+                        borderWidth: 1,
+                        padding: 10,
+                        boxPadding: 4,
+                        usePointStyle: true,
                         callbacks: {
                             label: function(context) {
                                 let total = context.dataset.data.reduce((a, b) => a + b, 0);
