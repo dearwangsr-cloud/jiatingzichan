@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -12,8 +12,8 @@
     <link rel="manifest" href="/manifest.json">
 
     <script>
-        // 注册 PWA Service Worker
-        if ('serviceWorker' in navigator) {
+        // 注册 PWA Service Worker（增加协议判断，避免本地 file:// 协议报错）
+        if ('serviceWorker' in navigator && location.protocol !== 'file:') {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/service-worker.js')
                     .then(reg => console.log('Service Worker 注册成功:', reg.scope))
@@ -255,6 +255,25 @@
             opacity: 0.8;
         }
 
+        .btn-cancel {
+            grid-column: 1 / -1;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: #f1f5f9;
+            color: var(--text-muted);
+            font-weight: 500;
+            cursor: pointer;
+            text-align: center;
+            font-size: 13px;
+            margin-top: 4px;
+            display: none;
+        }
+        .btn-cancel:hover {
+            background-color: #e2e8f0;
+            color: var(--text-main);
+        }
+
         /* 选项卡 Tab 样式 */
         .tab-container {
             display: flex;
@@ -327,14 +346,35 @@
             background-color: #f8fafc;
         }
 
-        .btn-delete {
+        .action-btns {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .btn-edit {
             background: none;
-            border: none;
-            color: var(--danger-color);
+            border: 1px solid var(--border-color);
+            color: var(--primary-color);
             cursor: pointer;
-            font-size: 14px;
+            font-size: 11px;
             padding: 2px 6px;
             border-radius: 4px;
+            background-color: #f8fafc;
+        }
+        .btn-edit:hover {
+            background-color: var(--primary-light);
+        }
+
+        .btn-delete {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--danger-color);
+            cursor: pointer;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background-color: #f8fafc;
         }
         .btn-delete:hover {
             background-color: var(--danger-light);
@@ -400,10 +440,10 @@
         </div>
     </div>
 
-    <!-- 资产登记模块增加点击折叠功能 -->
-    <div class="card" style="margin-bottom: 16px;">
+    <!-- 资产登记模块 -->
+    <div class="card" id="assetCard" style="margin-bottom: 16px;">
         <div class="card-title" style="color: var(--primary-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;" onclick="toggleForm('assetFormGrid', this)">
-            <span>➕ 资产登记</span>
+            <span id="assetFormTitle">➕ 资产登记</span>
             <span class="toggle-arrow" style="font-size: 12px; color: var(--text-muted);">▶</span>
         </div>
         <div class="form-grid" id="assetFormGrid" style="display: none; margin-top: 16px;">
@@ -431,14 +471,15 @@
                 <label>备注</label>
                 <input type="text" id="assetRemark" class="form-control" placeholder="可选填备注信息">
             </div>
-            <button type="button" class="btn-submit asset-btn" onclick="saveAssetRecord()">保存资产记录</button>
+            <button type="button" class="btn-submit asset-btn" id="assetSubmitBtn" onclick="saveRecord('asset')">保存资产记录</button>
+            <button type="button" class="btn-cancel" id="assetCancelBtn" onclick="cancelEdit('asset')">取消编辑</button>
         </div>
     </div>
 
-    <!-- 负债登记模块增加点击折叠功能 -->
-    <div class="card" style="margin-bottom: 16px;">
+    <!-- 负债登记模块 -->
+    <div class="card" id="debtCard" style="margin-bottom: 16px;">
         <div class="card-title" style="color: var(--danger-color); cursor: pointer; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;" onclick="toggleForm('debtFormGrid', this)">
-            <span>➖ 负债登记</span>
+            <span id="debtFormTitle">➖ 负债登记</span>
             <span class="toggle-arrow" style="font-size: 12px; color: var(--text-muted);">▶</span>
         </div>
         <div class="form-grid" id="debtFormGrid" style="display: none; margin-top: 16px;">
@@ -466,7 +507,8 @@
                 <label>备注</label>
                 <input type="text" id="debtRemark" class="form-control" placeholder="可选填备注信息">
             </div>
-            <button type="button" class="btn-submit debt-btn" onclick="saveDebtRecord()">保存负债记录</button>
+            <button type="button" class="btn-submit debt-btn" id="debtSubmitBtn" onclick="saveRecord('debt')">保存负债记录</button>
+            <button type="button" class="btn-cancel" id="debtCancelBtn" onclick="cancelEdit('debt')">取消编辑</button>
         </div>
     </div>
 
@@ -548,40 +590,35 @@
         }
     };
 
-    // 全局当前选中的状态标签
+    // 编辑状态追踪
+    let editingAssetId = null;
+    let editingDebtId = null;
+
     let currentChartDimension = 'member'; // member, name, category
     let currentDetailTab = 'asset';       // asset, debt
     let chartInstance = null;             // Chart.js 实例
 
-    // 页面初次加载初始化
     window.onload = function() {
-        // 设置表单的默认统计日期为今天
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('assetDate').value = today;
         document.getElementById('debtDate').value = today;
 
-        // 从本地存储读取历史保存数据
         loadFromLocalStorage();
-
-        // 首次全面渲染页面
         refreshUI();
     };
 
-    // 保存到本地浏览器缓存
     function saveToLocalStorage() {
         localStorage.setItem('family_finance_state', JSON.stringify(state));
     }
 
-    // 从本地浏览器缓存加载
     function loadFromLocalStorage() {
         const localData = localStorage.getItem('family_finance_state');
         if (localData) {
             try {
                 const parsed = JSON.parse(localData);
-                if (parsed.assets) state.assets = parsed.assets;
-                if (parsed.debts) state.debts = parsed.debts;
+                if (parsed.assets && Array.isArray(parsed.assets)) state.assets = parsed.assets;
+                if (parsed.debts && Array.isArray(parsed.debts)) state.debts = parsed.debts;
                 if (parsed.options) {
-                    // 合并原有的默认值和用户自定义追加的值，以去重方式处理
                     state.options.members = Array.from(new Set([...state.options.members, ...(parsed.options.members || [])]));
                     state.options.assetNames = Array.from(new Set([...state.options.assetNames, ...(parsed.options.assetNames || [])]));
                     state.options.assetCategories = Array.from(new Set([...state.options.assetCategories, ...(parsed.options.assetCategories || [])]));
@@ -594,14 +631,13 @@
         }
     }
 
-    // 控制登记面板的折叠和展开
     function toggleForm(gridId, titleElement) {
         const grid = document.getElementById(gridId);
         const arrow = titleElement.querySelector('.toggle-arrow');
         if (grid.style.display === 'none') {
             grid.style.display = 'grid';
             arrow.innerText = '▼';
-            titleElement.style.removeAttribute ? titleElement.style.removeAttribute('margin-bottom') : titleElement.style.marginBottom = '16px';
+            titleElement.style.marginBottom = '16px';
         } else {
             grid.style.display = 'none';
             arrow.innerText = '▶';
@@ -609,7 +645,6 @@
         }
     }
 
-    // 全局页面UI刷新机制
     function refreshUI() {
         updateDashboard();
         updateDatalists();
@@ -617,21 +652,18 @@
         renderChart();
     }
 
-    // 1. 顶部数据看板的统计数值逻辑更新
+    // 1. 看板数值统计（增加浮点数四舍五入防精度溢出）
     function updateDashboard() {
-        let totalAssetsSum = state.assets.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-        let totalDebtsSum = state.debts.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-        let netAssetsSum = totalAssetsSum - totalDebtsSum;
+        let totalAssetsSum = state.assets.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        let totalDebtsSum = state.debts.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        let netAssetsSum = Math.round((totalAssetsSum - totalDebtsSum) * 100) / 100;
 
-        // 数字千分位格式化显示
         document.getElementById('totalAssets').innerText = totalAssetsSum.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         document.getElementById('totalDebts').innerText = totalDebtsSum.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         document.getElementById('netAssets').innerText = netAssetsSum.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
-    // 2. 动态加载并合并历史输入记录到联想框下拉列表数据
     function updateDatalists() {
-        // 动态抓取当前 assets & debts 里的所有出现过的名称和分类，做到真正显示“之前记录过的名称”
         const currentMembers = Array.from(new Set([...state.options.members, ...state.assets.map(a => a.member), ...state.debts.map(d => d.member)]));
         const currentAssetNames = Array.from(new Set([...state.options.assetNames, ...state.assets.map(a => a.name)]));
         const currentAssetCats = Array.from(new Set([...state.options.assetCategories, ...state.assets.map(a => a.category)]));
@@ -658,14 +690,18 @@
         });
     }
 
-    // 3. 点击“保存资产记录”按钮的执行入口函数
-    function saveAssetRecord() {
-        const memberInput = document.getElementById('assetMember');
-        const nameInput = document.getElementById('assetName');
-        const categoryInput = document.getElementById('assetCategory');
-        const amountInput = document.getElementById('assetAmount');
-        const dateInput = document.getElementById('assetDate');
-        const remarkInput = document.getElementById('assetRemark');
+    // 2. 统一的数据保存与更新函数 (支持新增或编辑保存)
+    function saveRecord(type) {
+        const isAsset = type === 'asset';
+        const prefix = isAsset ? 'asset' : 'debt';
+        const editingId = isAsset ? editingAssetId : editingDebtId;
+
+        const memberInput = document.getElementById(prefix + 'Member');
+        const nameInput = document.getElementById(prefix + 'Name');
+        const categoryInput = document.getElementById(prefix + 'Category');
+        const amountInput = document.getElementById(prefix + 'Amount');
+        const dateInput = document.getElementById(prefix + 'Date');
+        const remarkInput = document.getElementById(prefix + 'Remark');
 
         const member = memberInput.value.trim();
         const name = nameInput.value.trim();
@@ -674,8 +710,10 @@
         const date = dateInput.value;
         const remark = remarkInput.value.trim();
 
+        const typeLabel = isAsset ? '资产' : '负债';
+
         if (!member || !name || !category || !amountStr || !date) {
-            alert('请完整填写必填项信息（家庭成员、资产名称、资产类别、金额、统计日期）！');
+            alert(`请完整填写必填项信息（家庭成员、${typeLabel}名称、${typeLabel}类别、金额、统计日期）！`);
             return;
         }
 
@@ -685,134 +723,172 @@
             return;
         }
 
-        const record = {
-            id: 'asset_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-            member: member,
-            name: name,
-            category: category,
-            amount: amount,
-            date: date,
-            remark: remark
-        };
+        const formattedAmount = Math.round(amount * 100) / 100;
 
-        state.assets.push(record);
+        if (editingId) {
+            // 编辑更新模式
+            const list = isAsset ? state.assets : state.debts;
+            const index = list.findIndex(item => item.id === editingId);
+            if (index !== -1) {
+                list[index] = {
+                    ...list[index],
+                    member,
+                    name,
+                    category,
+                    amount: formattedAmount,
+                    date,
+                    remark
+                };
+            }
+            cancelEdit(type);
+            alert(`${typeLabel}记录更新成功！`);
+        } else {
+            // 新增记录模式
+            const record = {
+                id: prefix + '_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                member,
+                name,
+                category,
+                amount: formattedAmount,
+                date,
+                remark
+            };
+
+            if (isAsset) {
+                state.assets.push(record);
+                if (!state.options.assetNames.includes(name)) state.options.assetNames.push(name);
+                if (!state.options.assetCategories.includes(category)) state.options.assetCategories.push(category);
+            } else {
+                state.debts.push(record);
+                if (!state.options.debtNames.includes(name)) state.options.debtNames.push(name);
+                if (!state.options.debtCategories.includes(category)) state.options.debtCategories.push(category);
+            }
+
+            memberInput.value = '';
+            nameInput.value = '';
+            categoryInput.value = '';
+            amountInput.value = '';
+            remarkInput.value = '';
+
+            alert(`${typeLabel}记录保存成功！`);
+        }
+
         if (!state.options.members.includes(member)) state.options.members.push(member);
-        if (!state.options.assetNames.includes(name)) state.options.assetNames.push(name);
-        if (!state.options.assetCategories.includes(category)) state.options.assetCategories.push(category);
 
         saveToLocalStorage();
         refreshUI();
-
-        memberInput.value = '';
-        nameInput.value = '';
-        categoryInput.value = '';
-        amountInput.value = '';
-        remarkInput.value = '';
-
-        alert('资产记录保存成功！');
     }
 
-    // 4. 点击“保存负债记录”按钮的执行入口函数
-    function saveDebtRecord() {
-        const memberInput = document.getElementById('debtMember');
-        const nameInput = document.getElementById('debtName');
-        const categoryInput = document.getElementById('debtCategory');
-        const amountInput = document.getElementById('debtAmount');
-        const dateInput = document.getElementById('debtDate');
-        const remarkInput = document.getElementById('debtRemark');
+    // 3. 进入编辑模式
+    function editRecord(type, id) {
+        const isAsset = type === 'asset';
+        const list = isAsset ? state.assets : state.debts;
+        const record = list.find(item => item.id === id);
+        if (!record) return;
 
-        const member = memberInput.value.trim();
-        const name = nameInput.value.trim();
-        const category = categoryInput.value.trim();
-        const amountStr = amountInput.value.trim();
-        const date = dateInput.value;
-        const remark = remarkInput.value.trim();
+        if (isAsset) {
+            editingAssetId = id;
+            document.getElementById('assetMember').value = record.member;
+            document.getElementById('assetName').value = record.name;
+            document.getElementById('assetCategory').value = record.category;
+            document.getElementById('assetAmount').value = record.amount;
+            document.getElementById('assetDate').value = record.date;
+            document.getElementById('assetRemark').value = record.remark || '';
 
-        if (!member || !name || !category || !amountStr || !date) {
-            alert('请完整填写必填项信息（家庭成员、负债名称、负债类别、金额、统计日期）！');
-            return;
+            document.getElementById('assetFormTitle').innerText = '✏️ 编辑资产记录';
+            document.getElementById('assetSubmitBtn').innerText = '更新资产记录';
+            document.getElementById('assetCancelBtn').style.display = 'block';
+
+            // 确保表单展开
+            const grid = document.getElementById('assetFormGrid');
+            if (grid.style.display === 'none') {
+                grid.style.display = 'grid';
+                document.querySelector('#assetCard .toggle-arrow').innerText = '▼';
+                document.querySelector('#assetCard .card-title').style.marginBottom = '16px';
+            }
+            document.getElementById('assetCard').scrollIntoView({ behavior: 'smooth' });
+        } else {
+            editingDebtId = id;
+            document.getElementById('debtMember').value = record.member;
+            document.getElementById('debtName').value = record.name;
+            document.getElementById('debtCategory').value = record.category;
+            document.getElementById('debtAmount').value = record.amount;
+            document.getElementById('debtDate').value = record.date;
+            document.getElementById('debtRemark').value = record.remark || '';
+
+            document.getElementById('debtFormTitle').innerText = '✏️ 编辑负债记录';
+            document.getElementById('debtSubmitBtn').innerText = '更新负债记录';
+            document.getElementById('debtCancelBtn').style.display = 'block';
+
+            // 确保表单展开
+            const grid = document.getElementById('debtFormGrid');
+            if (grid.style.display === 'none') {
+                grid.style.display = 'grid';
+                document.querySelector('#debtCard .toggle-arrow').innerText = '▼';
+                document.querySelector('#debtCard .card-title').style.marginBottom = '16px';
+            }
+            document.getElementById('debtCard').scrollIntoView({ behavior: 'smooth' });
         }
-
-        const amount = parseFloat(amountStr);
-        if (isNaN(amount) || amount <= 0) {
-            alert('请输入大于 0 的有效数字金额！');
-            return;
-        }
-
-        const record = {
-            id: 'debt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-            member: member,
-            name: name,
-            category: category,
-            amount: amount,
-            date: date,
-            remark: remark
-        };
-
-        state.debts.push(record);
-        if (!state.options.members.includes(member)) state.options.members.push(member);
-        if (!state.options.debtNames.includes(name)) state.options.debtNames.push(name);
-        if (!state.options.debtCategories.includes(category)) state.options.debtCategories.push(category);
-
-        saveToLocalStorage();
-        refreshUI();
-
-        memberInput.value = '';
-        nameInput.value = '';
-        categoryInput.value = '';
-        amountInput.value = '';
-        remarkInput.value = '';
-
-        alert('负债记录保存成功！');
     }
 
-    // 5. 账目明细底层数据表格渲染
+    // 4. 取消编辑
+    function cancelEdit(type) {
+        const isAsset = type === 'asset';
+        const prefix = isAsset ? 'asset' : 'debt';
+
+        if (isAsset) {
+            editingAssetId = null;
+            document.getElementById('assetFormTitle').innerText = '➕ 资产登记';
+            document.getElementById('assetSubmitBtn').innerText = '保存资产记录';
+            document.getElementById('assetCancelBtn').style.display = 'none';
+        } else {
+            editingDebtId = null;
+            document.getElementById('debtFormTitle').innerText = '➖ 负债登记';
+            document.getElementById('debtSubmitBtn').innerText = '保存负债记录';
+            document.getElementById('debtCancelBtn').style.display = 'none';
+        }
+
+        document.getElementById(prefix + 'Member').value = '';
+        document.getElementById(prefix + 'Name').value = '';
+        document.getElementById(prefix + 'Category').value = '';
+        document.getElementById(prefix + 'Amount').value = '';
+        document.getElementById(prefix + 'Remark').value = '';
+        document.getElementById(prefix + 'Date').value = new Date().toISOString().split('T')[0];
+    }
+
+    // 5. 渲染表格（带有编辑和删除按钮）
     function renderTables() {
-        const assetBody = document.getElementById('assetTableBody');
-        const assetEmpty = document.getElementById('assetEmpty');
-        assetBody.innerHTML = '';
+        renderSingleTable('asset', state.assets, 'assetTableBody', 'assetEmpty', 'var(--primary-color)', '#f1f5f9');
+        renderSingleTable('debt', state.debts, 'debtTableBody', 'debtEmpty', 'var(--danger-color)', '#fee2e2', '#b91c1c');
+    }
 
-        if (state.assets.length === 0) {
-            assetEmpty.style.display = 'block';
+    function renderSingleTable(type, dataList, bodyId, emptyId, amountColor, catBgColor, catTextColor = '#334155') {
+        const body = document.getElementById(bodyId);
+        const emptyTip = document.getElementById(emptyId);
+        body.innerHTML = '';
+
+        if (dataList.length === 0) {
+            emptyTip.style.display = 'block';
         } else {
-            assetEmpty.style.display = 'none';
-            const sortedAssets = [...state.assets].sort((a, b) => new Date(b.date) - new Date(a.date));
-            sortedAssets.forEach(item => {
+            emptyTip.style.display = 'none';
+            const sorted = [...dataList].sort((a, b) => new Date(b.date) - new Date(a.date));
+            sorted.forEach(item => {
                 let tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${escapeHtml(item.member)}</td>
                     <td>${escapeHtml(item.name)}</td>
-                    <td><span style="background-color: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size:11px;">${escapeHtml(item.category)}</span></td>
-                    <td style="font-weight:600; color:var(--primary-color)">${item.amount.toLocaleString('zh-CN', {minimumFractionDigits:2})}</td>
+                    <td><span style="background-color: ${catBgColor}; color: ${catTextColor}; padding: 2px 6px; border-radius: 4px; font-size:11px;">${escapeHtml(item.category)}</span></td>
+                    <td style="font-weight:600; color: ${amountColor}">${Number(item.amount).toLocaleString('zh-CN', {minimumFractionDigits:2})}</td>
                     <td>${item.date}</td>
                     <td style="color:var(--text-muted); font-size:12px; max-width:150px; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(item.remark || '')}">${escapeHtml(item.remark || '-')}</td>
-                    <td><button class="btn-delete" onclick="deleteRecord('asset', '${item.id}')">✕</button></td>
+                    <td>
+                        <div class="action-btns">
+                            <button class="btn-edit" onclick="editRecord('${type}', '${item.id}')">编辑</button>
+                            <button class="btn-delete" onclick="deleteRecord('${type}', '${item.id}')">✕</button>
+                        </div>
+                    </td>
                 `;
-                assetBody.appendChild(tr);
-            });
-        }
-
-        const debtBody = document.getElementById('debtTableBody');
-        const debtEmpty = document.getElementById('debtEmpty');
-        debtBody.innerHTML = '';
-
-        if (state.debts.length === 0) {
-            debtEmpty.style.display = 'block';
-        } else {
-            debtEmpty.style.display = 'none';
-            const sortedDebts = [...state.debts].sort((a, b) => new Date(b.date) - new Date(a.date));
-            sortedDebts.forEach(item => {
-                let tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${escapeHtml(item.member)}</td>
-                    <td>${escapeHtml(item.name)}</td>
-                    <td><span style="background-color: #fee2e2; color:#b91c1c; padding: 2px 6px; border-radius: 4px; font-size:11px;">${escapeHtml(item.category)}</span></td>
-                    <td style="font-weight:600; color:var(--danger-color)">${item.amount.toLocaleString('zh-CN', {minimumFractionDigits:2})}</td>
-                    <td>${item.date}</td>
-                    <td style="color:var(--text-muted); font-size:12px; max-width:150px; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(item.remark || '')}">${escapeHtml(item.remark || '-')}</td>
-                    <td><button class="btn-delete" onclick="deleteRecord('debt', '${item.id}')">✕</button></td>
-                `;
-                debtBody.appendChild(tr);
+                body.appendChild(tr);
             });
         }
     }
@@ -829,8 +905,10 @@
         if (!confirm('确定要彻底删除该条记账记录吗？')) return;
 
         if (type === 'asset') {
+            if (editingAssetId === id) cancelEdit('asset');
             state.assets = state.assets.filter(item => item.id !== id);
         } else if (type === 'debt') {
+            if (editingDebtId === id) cancelEdit('debt');
             state.debts = state.debts.filter(item => item.id !== id);
         }
 
@@ -838,7 +916,7 @@
         refreshUI();
     }
 
-    // 6. 统计图表三个维度计算与生成渲染逻辑
+    // 6. 图表渲染与百分比计算防错
     function switchChartTab(dimension) {
         currentChartDimension = dimension;
         document.getElementById('tabMember').classList.toggle('active', dimension === 'member');
@@ -872,7 +950,7 @@
             else if (currentChartDimension === 'category') key = item.category || '未定义';
 
             if (!groupData[key]) groupData[key] = 0;
-            groupData[key] += parseFloat(item.amount || 0);
+            groupData[key] += Number(item.amount || 0);
         });
 
         let labels = Object.keys(groupData);
@@ -887,7 +965,6 @@
             '#3b82f6', '#14b8a6', '#f97316', '#6366f1', '#a855f7'
         ];
 
-        // 构建初始化 Chart.js 并通过自定义中心内容绘制插件（完美实现图例点击动态加减总额）
         chartInstance = new Chart(canvas, {
             type: 'doughnut',
             data: {
@@ -910,7 +987,6 @@
                             padding: 12,
                             font: { size: 11 }
                         },
-                        // 图例点击回调拦截：图例被剔除时触发重新绘图计算
                         onClick: function(e, legendItem, legend) {
                             const index = legendItem.index;
                             legend.chart.toggleDataVisibility(index);
@@ -918,7 +994,6 @@
                         }
                     },
                     tooltip: {
-                        // 优化：将悬浮提示框背景改为不透明的纯色，并增加边框与阴影，避免与中心文字半透明重叠干扰
                         backgroundColor: 'rgba(255, 255, 255, 1)',
                         titleColor: '#1e293b',
                         bodyColor: '#334155',
@@ -931,14 +1006,13 @@
                             label: function(context) {
                                 let total = context.dataset.data.reduce((a, b) => a + b, 0);
                                 let value = context.raw;
-                                let percentage = ((value / total) * 100).toFixed(2);
+                                let percentage = total > 0 ? ((value / total) * 100).toFixed(2) : 0;
                                 return ` ${context.label}: ${value.toLocaleString('zh-CN')} 元 (${percentage}%)`;
                             }
                         }
                     }
                 }
             },
-            // 使用自定义核心 Canvas 插件在圆环图中心写字，做到绝对适配且完美响应点击事件
             plugins: [{
                 id: 'centerTotalPlugin',
                 afterDraw: function(chart) {
@@ -946,29 +1020,25 @@
                     const { ctx, chartArea } = chart;
                     if (!chartArea) return;
 
-                    // 计算甜甜圈的几何正中心
                     const centerX = (chartArea.left + chartArea.right) / 2;
                     const centerY = (chartArea.top + chartArea.bottom) / 2;
 
                     ctx.save();
                     
-                    // 1. 绘制上半部分的提示字
                     ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
                     ctx.fillStyle = "#64748b";
                     ctx.textBaseline = "middle";
                     ctx.textAlign = "center";
                     ctx.fillText("选中资产总额", centerX, centerY - 10);
 
-                    // 2. 实时动态计算当前“未被隐藏”的分类金额总和
                     let currentVisibleTotal = 0;
                     const dataset = chart.data.datasets[0];
                     dataset.data.forEach((val, i) => {
                         if (chart.getDataVisibility(i)) {
-                            currentVisibleTotal += parseFloat(val || 0);
+                            currentVisibleTotal += Number(val || 0);
                         }
                     });
 
-                    // 3. 绘制下半部分的动态计算金额
                     ctx.font = "bold 13px -apple-system, BlinkMacSystemFont, sans-serif";
                     ctx.fillStyle = "#1e293b";
                     ctx.fillText(currentVisibleTotal.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " 元", centerX, centerY + 10);
@@ -979,14 +1049,13 @@
         });
     }
 
-    // 7. 辅助功能：数据导出为 JSON 文件（已优化 Blob 方式，解决部分设备和系统无法识别选择的问题）
+    // 7. 数据导入导出与重置（增加 JSON 解析防错）
     function exportData() {
         if (state.assets.length === 0 && state.debts.length === 0) {
             alert('当前系统中无任何记账数据可供导出！');
             return;
         }
         
-        // 使用 Blob 对象替代原来的 data URI，确保导出文件的 MIME type 完美规范
         const dataStr = JSON.stringify(state, null, 2);
         const blob = new Blob([dataStr], { type: 'application/json;charset=utf-8' });
         const downloadAnchor = document.createElement('a');
@@ -998,7 +1067,6 @@
         downloadAnchor.click();
         downloadAnchor.remove();
         
-        // 释放内存中的 URL 对象
         setTimeout(() => {
             URL.revokeObjectURL(downloadAnchor.href);
         }, 1000);
@@ -1016,11 +1084,13 @@
         reader.onload = function(evt) {
             try {
                 const parsed = JSON.parse(evt.target.result);
-                if (parsed.assets || parsed.debts) {
+                if (parsed && (Array.isArray(parsed.assets) || Array.isArray(parsed.debts))) {
                     if (parsed.assets) state.assets = parsed.assets;
                     if (parsed.debts) state.debts = parsed.debts;
                     if (parsed.options) state.options = parsed.options;
                     
+                    cancelEdit('asset');
+                    cancelEdit('debt');
                     saveToLocalStorage();
                     refreshUI();
                     alert('数据备份文件已成功导入并恢复！');
@@ -1039,6 +1109,8 @@
         if (!confirm('警告：此操作将永久清空您设备本地保存的所有资产和负债记录！确认重置吗？')) return;
         state.assets = [];
         state.debts = [];
+        cancelEdit('asset');
+        cancelEdit('debt');
         saveToLocalStorage();
         refreshUI();
         alert('本地账目数据库已全部重置清空！');
@@ -1046,11 +1118,11 @@
 
     function escapeHtml(str) {
         if (!str) return '';
-        return str.replace(/&/g, "&amp;")
-                  .replace(/</g, "&lt;")
-                  .replace(/>/g, "&gt;")
-                  .replace(/"/g, "&quot;")
-                  .replace(/'/g, "&#039;");
+        return String(str).replace(/&/g, "&amp;")
+                          .replace(/</g, "&lt;")
+                          .replace(/>/g, "&gt;")
+                          .replace(/"/g, "&quot;")
+                          .replace(/'/g, "&#039;");
     }
 </script>
 </body>
